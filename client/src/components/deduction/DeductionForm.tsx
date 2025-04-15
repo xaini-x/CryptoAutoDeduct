@@ -10,9 +10,12 @@ import { AlertCircle, CheckCircle } from 'lucide-react';
 import TokenSelect from '@/components/wallet/TokenSelect';
 
 export default function DeductionForm() {
-  const { isConnected, balance } = useWallet();
+  const { isConnected, balance, selectedToken, tokenBalances } = useWallet();
   const { formData, updateFormData, submitDeduction } = useDeduction();
   const ethPrice = balance?.usdValue ? parseFloat(balance.usdValue) / parseFloat(balance.balance) : 2000;
+  
+  // Get the symbol of the selected token for display
+  const selectedTokenSymbol = balance?.symbol || 'ETH';
   
   // Set default start date to tomorrow
   useEffect(() => {
@@ -30,10 +33,10 @@ export default function DeductionForm() {
     ? `≈ $${(parseFloat(formData.amount) * ethPrice).toFixed(2)} USD`
     : '≈ $0.00 USD';
 
-  // Calculate total ETH over period for summary
+  // Calculate total tokens over period for summary
   const calculateTotal = () => {
     const amount = parseFloat(formData.amount) || 0;
-    if (amount <= 0 || !formData.interval) return '0.00 ETH';
+    if (amount <= 0 || !formData.interval) return `0.00 ${selectedTokenSymbol}`;
     
     const periodsPerMonth: Record<DeductionInterval, number> = {
       'daily': 30,
@@ -44,12 +47,12 @@ export default function DeductionForm() {
     
     if (formData.duration === 'indefinite') {
       const monthlyTotal = amount * periodsPerMonth[formData.interval];
-      return `${monthlyTotal.toFixed(5)} ETH per month`;
+      return `${monthlyTotal.toFixed(5)} ${selectedTokenSymbol} per month`;
     }
     
     const months = parseInt(formData.duration);
     const total = amount * periodsPerMonth[formData.interval] * months;
-    return `${total.toFixed(5)} ETH`;
+    return `${total.toFixed(5)} ${selectedTokenSymbol}`;
   };
 
   const handleIntervalSelect = (interval: DeductionInterval) => {
@@ -76,6 +79,16 @@ export default function DeductionForm() {
         )}
         
         <form className="space-y-6" onSubmit={handleSubmit}>
+          {/* Token Select */}
+          {isConnected && (
+            <div className="space-y-2">
+              <Label className="text-sm font-medium text-gray-300">
+                Token To Deduct
+              </Label>
+              <TokenSelect />
+            </div>
+          )}
+          
           {/* Amount Input */}
           <div className="space-y-2">
             <Label htmlFor="deductionAmount" className="text-sm font-medium text-gray-300">
@@ -88,12 +101,12 @@ export default function DeductionForm() {
                 placeholder="0.00"
                 step="0.001"
                 min="0"
-                className="bg-gray-800 border-gray-700 pr-12"
+                className="bg-gray-800 border-gray-700 pr-16"
                 value={formData.amount}
                 onChange={(e) => updateFormData({ amount: e.target.value })}
               />
               <div className="absolute inset-y-0 right-0 pr-3 flex items-center pointer-events-none text-gray-400">
-                ETH
+                {selectedTokenSymbol}
               </div>
             </div>
             <div className="text-sm text-gray-400">{amountInUsd}</div>
@@ -162,8 +175,12 @@ export default function DeductionForm() {
             <h3 className="font-medium mb-3">Deduction Summary</h3>
             <div className="space-y-2 text-sm mb-4">
               <div className="flex justify-between">
+                <span className="text-gray-400">Token:</span>
+                <span>{selectedTokenSymbol}</span>
+              </div>
+              <div className="flex justify-between">
                 <span className="text-gray-400">Amount:</span>
-                <span>{formData.amount ? `${formData.amount} ETH` : '0.00 ETH'}</span>
+                <span>{formData.amount ? `${formData.amount} ${selectedTokenSymbol}` : `0.00 ${selectedTokenSymbol}`}</span>
               </div>
               <div className="flex justify-between">
                 <span className="text-gray-400">Frequency:</span>

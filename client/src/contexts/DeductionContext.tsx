@@ -132,6 +132,10 @@ export const DeductionProvider: React.FC<DeductionProviderProps> = ({ children }
     openApprovalModal();
   }, [address, formData, openApprovalModal, showNotification]);
 
+  // Get wallet information
+  const { balance, selectedToken } = useWallet();
+  const selectedTokenSymbol = balance?.symbol || 'ETH';
+  
   const approveDeduction = useCallback(async () => {
     if (!address || !formData.interval) return;
     
@@ -140,6 +144,7 @@ export const DeductionProvider: React.FC<DeductionProviderProps> = ({ children }
     showNotification('pending', 'Transaction Pending', 'Your transaction is being processed.');
 
     try {
+      
       // 1. Submit to blockchain
       const startDateTimestamp = new Date(formData.startDate).getTime() / 1000;
       const txHash = await web3Service.scheduleDeduction(
