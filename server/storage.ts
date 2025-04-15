@@ -81,7 +81,9 @@ export class MemStorage implements IStorage {
       ...deduction, 
       id, 
       createdAt,
-      status: deduction.status || 'pending' // Ensure status is provided
+      status: deduction.status || 'pending', // Ensure status is provided
+      tokenSymbol: deduction.tokenSymbol || 'ETH', // Ensure token symbol is provided
+      tokenAddress: deduction.tokenAddress || '' // Ensure token address is provided
     };
     this.scheduledDeductions.set(id, newDeduction);
     return newDeduction;
@@ -116,7 +118,9 @@ export class MemStorage implements IStorage {
       ...transaction, 
       id,
       date: transaction.date || new Date(),   // Ensure date is provided
-      txHash: transaction.txHash || ""        // Ensure txHash is provided
+      txHash: transaction.txHash || "",       // Ensure txHash is provided
+      tokenSymbol: transaction.tokenSymbol || 'ETH', // Ensure token symbol is provided
+      tokenAddress: transaction.tokenAddress || '' // Ensure token address is provided
     };
     this.transactions.set(id, newTransaction);
     return newTransaction;
