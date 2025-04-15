@@ -14,8 +14,8 @@ export default function DeductionForm() {
   const { formData, updateFormData, submitDeduction } = useDeduction();
   const ethPrice = balance?.usdValue ? parseFloat(balance.usdValue) / parseFloat(balance.balance) : 2000;
   
-  // Get the symbol of the selected token for display
-  const selectedTokenSymbol = balance?.symbol || 'ETH';
+  // We're using USDT for all deductions
+  const selectedTokenSymbol = 'USDT';
   
   // Set default start date to tomorrow
   useEffect(() => {

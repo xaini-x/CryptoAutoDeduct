@@ -1,45 +1,36 @@
 import { useState, useEffect } from 'react';
 import { useWallet } from '@/contexts/WalletContext';
-import web3Service, { TokenInfo, TokenBalance } from '@/lib/web3';
+import web3Service, { TokenBalance } from '@/lib/web3';
 import { Loader2 } from 'lucide-react';
 
 export default function TokenSelect() {
   const { isConnected, address } = useWallet();
-  const [selectedToken, setSelectedToken] = useState<string | null>(null);
-  const [tokens, setTokens] = useState<TokenInfo[]>([]);
-  const [tokenBalances, setTokenBalances] = useState<TokenBalance[]>([]);
+  const [usdtBalance, setUsdtBalance] = useState<TokenBalance | null>(null);
+  const [nativeBalance, setNativeBalance] = useState<TokenBalance | null>(null);
   const [isLoading, setIsLoading] = useState(false);
 
-  // Load supported tokens whenever wallet is connected
+  // Load USDT balance whenever wallet is connected
   useEffect(() => {
     if (!isConnected) return;
     
-    // Get supported tokens for the current network
-    const supportedTokens = web3Service.getSupportedTokens();
-    setTokens(supportedTokens);
-    
-    // If we have tokens, load their balances
-    if (supportedTokens.length > 0) {
-      loadTokenBalances();
-    }
+    loadBalances();
   }, [isConnected, address]);
   
-  // Load balances for all tokens
-  const loadTokenBalances = async () => {
+  // Load balances for native token and USDT
+  const loadBalances = async () => {
     if (!isConnected) return;
     
     setIsLoading(true);
     try {
-      const balances = await web3Service.getAllTokenBalances();
-      setTokenBalances(balances);
+      // Get native token balance (ETH/MATIC)
+      const native = await web3Service.getNativeBalance();
+      setNativeBalance(native);
       
-      // Automatically select the first token with positive balance
-      const tokenWithBalance = balances.find(t => 
-        t.address && parseFloat(t.balance) > 0
-      );
-      
-      if (tokenWithBalance?.address && !selectedToken) {
-        handleTokenSelect(tokenWithBalance.address);
+      // Get USDT balance
+      const usdtTokenInfo = web3Service.getSupportedTokens()[0];
+      if (usdtTokenInfo?.address) {
+        const usdt = await web3Service.getTokenBalance(usdtTokenInfo.address);
+        setUsdtBalance(usdt);
       }
     } catch (error) {
       console.error('Failed to load token balances:', error);
@@ -47,30 +38,11 @@ export default function TokenSelect() {
       setIsLoading(false);
     }
   };
-  
-  // Handle token selection
-  const handleTokenSelect = (tokenAddress: string) => {
-    setSelectedToken(tokenAddress);
-    web3Service.setTokenAddress(tokenAddress);
-  };
-  
-  // Show native token balance (ETH or MATIC)
-  const nativeBalance = tokenBalances.find(t => !t.address);
-  
-  // Filter out tokens with balance (to display at the top)
-  const tokensWithBalance = tokenBalances.filter(t => 
-    t.address && parseFloat(t.balance) > 0
-  );
-  
-  // Other tokens (with zero balance)
-  const zeroBalanceTokens = tokenBalances.filter(t => 
-    t.address && parseFloat(t.balance) === 0
-  );
 
   if (!isConnected) {
     return (
       <div className="mb-4 p-4 bg-gray-800 border border-gray-700 rounded-lg">
-        <p className="text-gray-400">Connect your wallet to select tokens</p>
+        <p className="text-gray-400">Connect your wallet to see USDT balance</p>
       </div>
     );
   }
@@ -79,81 +51,51 @@ export default function TokenSelect() {
     return (
       <div className="mb-4 p-4 bg-gray-800 border border-gray-700 rounded-lg flex items-center justify-center">
         <Loader2 className="h-5 w-5 animate-spin mr-2" />
-        <p>Loading tokens...</p>
-      </div>
-    );
-  }
-  
-  if (tokens.length === 0) {
-    return (
-      <div className="mb-4 p-4 bg-gray-800 border border-gray-700 rounded-lg">
-        <p className="text-gray-400">No testnet tokens available on this network</p>
-        <p className="text-sm text-gray-500 mt-1">Switch to Goerli or Mumbai testnet</p>
+        <p>Loading USDT balance...</p>
       </div>
     );
   }
 
   return (
     <div className="mb-4 p-4 bg-gray-800 border border-gray-700 rounded-lg">
-      <h3 className="text-lg font-medium mb-3">Select Token for Deduction</h3>
+      <h3 className="text-lg font-medium mb-3">Token Information</h3>
       
       {/* Native token balance (ETH/MATIC) */}
       {nativeBalance && (
-        <div className="mb-2">
-          <p className="text-sm text-gray-400">
-            Native Balance: {parseFloat(nativeBalance.balance).toFixed(4)} {nativeBalance.symbol}
+        <div className="mb-3 p-2 bg-gray-700 rounded">
+          <p className="text-sm">
+            Native Balance: <span className="font-medium">
+              {parseFloat(nativeBalance.balance).toFixed(4)} {nativeBalance.symbol}
+            </span>
           </p>
         </div>
       )}
       
-      <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 mb-4">
-        {/* Tokens with balance */}
-        {tokensWithBalance.map((token) => (
-          <button
-            key={token.address}
-            onClick={() => token.address && handleTokenSelect(token.address)}
-            className={`p-2 rounded-md flex flex-col items-center justify-center text-center transition-colors ${
-              selectedToken === token.address
-                ? 'bg-primary/20 border border-primary'
-                : 'bg-gray-700 border border-gray-600 hover:bg-gray-600'
-            }`}
-          >
-            <span className="font-medium">{token.symbol}</span>
-            <span className="text-xs text-gray-300">
-              {parseFloat(token.balance).toFixed(token.decimals > 8 ? 4 : 2)}
-            </span>
-          </button>
-        ))}
+      {/* USDT balance */}
+      <div className={`p-3 rounded-md border ${usdtBalance ? 'bg-primary/10 border-primary' : 'bg-gray-700 border-gray-600'}`}>
+        <div className="flex items-center justify-between mb-1">
+          <span className="font-medium text-lg">USDT</span>
+          <div className="bg-gray-700 px-2 py-1 rounded text-xs">Selected</div>
+        </div>
         
-        {/* Zero balance tokens */}
-        {zeroBalanceTokens.map((token) => (
-          <button
-            key={token.address}
-            onClick={() => token.address && handleTokenSelect(token.address)}
-            className={`p-2 rounded-md flex flex-col items-center justify-center text-center opacity-70 transition-colors ${
-              selectedToken === token.address
-                ? 'bg-primary/20 border border-primary'
-                : 'bg-gray-700 border border-gray-600 hover:bg-gray-600'
-            }`}
-          >
-            <span className="font-medium">{token.symbol}</span>
-            <span className="text-xs text-gray-300">0.00</span>
-          </button>
-        ))}
+        <p className="text-sm">
+          Balance: <span className="font-medium">
+            {usdtBalance 
+              ? parseFloat(usdtBalance.balance).toFixed(2)
+              : '0.00'
+            } USDT
+          </span>
+        </p>
+        
+        {usdtBalance?.address && (
+          <p className="text-xs text-gray-400 mt-1 truncate">
+            Contract: {usdtBalance.address}
+          </p>
+        )}
       </div>
       
-      {selectedToken && (
-        <div className="mt-2 p-2 bg-gray-700 rounded-md">
-          <p className="text-sm">
-            Selected: <span className="font-medium">
-              {tokenBalances.find(t => t.address === selectedToken)?.symbol || 'Unknown Token'}
-            </span>
-          </p>
-        </div>
-      )}
-      
       <p className="text-xs text-gray-500 mt-2">
-        Note: You need testnet tokens to schedule deductions. Use a faucet to get testnet tokens.
+        Note: You need USDT tokens to schedule deductions. Use a faucet to get testnet USDT.
       </p>
     </div>
   );

@@ -20,64 +20,21 @@ const DEDUCTION_CONTRACT_ABI = [
 // Default contract address (would be replaced with actual contract address on testnet)
 const DEDUCTION_CONTRACT_ADDRESS = "0x0000000000000000000000000000000000000000";
 
-type TokenDetails = {
-  symbol: string;
-  name: string;
-  decimals: number;
+// Hardcoded USDT token addresses for different networks
+const USDT_ADDRESSES = {
+  // Goerli testnet
+  "0x5": "0xC2C527C0CACF457746Bd31B2a698Fe89de2b6d49",
+  // Mumbai testnet
+  "0x13881": "0xA02f6adc7926efeBBd59Fd43A84f4E0c0c91e832",
+  // Default for other networks
+  "default": "0xdAC17F958D2ee523a2206206994597C13D831ec7"
 };
 
-type NetworkTokens = {
-  [tokenAddress: string]: TokenDetails;
-};
-
-type TestnetTokenMap = {
-  [chainId: string]: NetworkTokens;
-};
-
-// Testnet token addresses (add more as needed)
-export const TESTNET_TOKENS: TestnetTokenMap = {
-  // Goerli testnet tokens
-  "0x5": {
-    // Goerli TestUSDC
-    "0x07865c6e87b9f70255377e024ace6630c1eaa37f": {
-      symbol: "USDC",
-      name: "USD Coin (Goerli)",
-      decimals: 6,
-    },
-    // Goerli TestDAI 
-    "0x11fe4b6ae13d2a6055c8d9cf65c55bac32b5d844": {
-      symbol: "DAI",
-      name: "Dai Stablecoin (Goerli)",
-      decimals: 18,
-    },
-    // Goerli Test LINK
-    "0x326c977e6efc84e512bb9c30f76e30c160ed06fb": {
-      symbol: "LINK",
-      name: "ChainLink Token (Goerli)",
-      decimals: 18,
-    },
-  },
-  // Mumbai testnet tokens (Polygon)
-  "0x13881": {
-    // Mumbai TestUSDC
-    "0xe11a86849d99f524cac3e7a0ec1241828e332c62": {
-      symbol: "USDC",
-      name: "USD Coin (Mumbai)",
-      decimals: 6,
-    },
-    // Mumbai TestDAI
-    "0xd393b1e02da9831ff419e22ea105aae4c47e1253": {
-      symbol: "DAI",
-      name: "Dai Stablecoin (Mumbai)", 
-      decimals: 18,
-    },
-    // Mumbai Test WMATIC
-    "0x9c3c9283d3e44854697cd22d3faa240cfb032889": {
-      symbol: "WMATIC",
-      name: "Wrapped Matic (Mumbai)",
-      decimals: 18,
-    },
-  },
+// USDT token details
+const USDT_TOKEN_DETAILS = {
+  symbol: "USDT",
+  name: "Tether USD",
+  decimals: 6
 };
 
 export type Network = {
@@ -132,8 +89,8 @@ export class Web3Service {
         this.signer
       );
       
-      // Load supported tokens for current network
-      await this.loadSupportedTokens();
+      // Load USDT token for current network
+      await this.loadUsdtToken();
       
       return accounts[0];
     } catch (error) {
@@ -142,36 +99,34 @@ export class Web3Service {
     }
   }
   
-  // Load supported tokens based on current network
-  private async loadSupportedTokens(): Promise<void> {
+  // Load USDT token for the current network
+  private async loadUsdtToken(): Promise<void> {
     if (!this.provider) return;
     
     try {
       const network = await this.provider.getNetwork();
       const chainId = `0x${network.chainId.toString(16)}`;
       
+      // Clear existing tokens
       this.supportedTokens = [];
       
-      // Type guard to check if the chainId exists in TESTNET_TOKENS
-      if (chainId in TESTNET_TOKENS) {
-        // Type assertion to help TypeScript understand the indexing
-        const networkTokens = TESTNET_TOKENS[chainId as keyof typeof TESTNET_TOKENS];
-        
-        // Convert token map to array of token info objects
-        for (const address in networkTokens) {
-          const token = networkTokens[address as keyof typeof networkTokens];
-          this.supportedTokens.push({
-            address,
-            symbol: token.symbol,
-            name: token.name,
-            decimals: token.decimals
-          });
-        }
-      }
+      // Get USDT address for current network or use default
+      let usdtAddress = USDT_ADDRESSES[chainId as keyof typeof USDT_ADDRESSES] || USDT_ADDRESSES.default;
       
-      console.log(`Loaded ${this.supportedTokens.length} tokens for network ${network.name} (${chainId})`);
+      // Add USDT token
+      this.supportedTokens.push({
+        address: usdtAddress,
+        symbol: USDT_TOKEN_DETAILS.symbol,
+        name: USDT_TOKEN_DETAILS.name,
+        decimals: USDT_TOKEN_DETAILS.decimals
+      });
+      
+      // Automatically set USDT as the selected token
+      this.setTokenAddress(usdtAddress);
+      
+      console.log(`Set up USDT token (${usdtAddress}) for network ${network.name} (${chainId})`);
     } catch (error) {
-      console.error("Failed to load supported tokens:", error);
+      console.error("Failed to load USDT token:", error);
     }
   }
 
@@ -180,6 +135,7 @@ export class Web3Service {
     this.signer = null;
     this.deductionContract = null;
     this.erc20Contract = null;
+    this.tokenAddress = null;
   }
 
   isConnected(): boolean {
@@ -207,7 +163,7 @@ export class Web3Service {
     }
   }
 
-  // Get all supported tokens for the current network
+  // Get the USDT token info
   getSupportedTokens(): TokenInfo[] {
     return this.supportedTokens;
   }
@@ -256,7 +212,7 @@ export class Web3Service {
     }
   }
   
-  // Get a specific token balance
+  // Get USDT token balance
   async getTokenBalance(tokenAddress: string): Promise<TokenBalance | null> {
     if (!this.provider || !this.signer) return null;
     
@@ -286,16 +242,17 @@ export class Web3Service {
     }
   }
   
-  // Get the balance of the currently selected token or native token
+  // Get the USDT token balance
   async getBalance(): Promise<TokenBalance | null> {
     if (this.tokenAddress) {
       return this.getTokenBalance(this.tokenAddress);
     } else {
+      // Fallback to native token balance if no token address set
       return this.getNativeBalance();
     }
   }
   
-  // Get balances for all supported tokens
+  // Get balances for native token and USDT
   async getAllTokenBalances(): Promise<TokenBalance[]> {
     if (!this.provider || !this.signer || this.supportedTokens.length === 0) {
       return [];
@@ -307,7 +264,7 @@ export class Web3Service {
     const nativeBalance = await this.getNativeBalance();
     if (nativeBalance) balances.push(nativeBalance);
     
-    // Add all token balances
+    // Add USDT balance
     for (const token of this.supportedTokens) {
       try {
         const balance = await this.getTokenBalance(token.address);
@@ -330,20 +287,20 @@ export class Web3Service {
       throw new Error("Wallet not connected");
     }
     
-    // Check if we have a token address selected
+    // Check if we have USDT token address
     if (!this.tokenAddress || !this.erc20Contract) {
-      throw new Error("No token selected. Please select a token for the deduction.");
+      throw new Error("USDT token not set up properly");
     }
     
     try {
-      // Step 1: Get token decimals to format the amount correctly
-      const tokenInfo = this.supportedTokens.find(t => t.address.toLowerCase() === this.tokenAddress?.toLowerCase());
-      const decimals = tokenInfo?.decimals || 18;
+      // Step 1: Get USDT token decimals (should be 6)
+      const tokenInfo = this.supportedTokens[0];
+      const decimals = tokenInfo?.decimals || 6;
       
-      // Step 2: Convert amount to token units based on decimals
+      // Step 2: Convert amount to USDT units (6 decimals)
       const amountInTokenUnits = ethers.utils.parseUnits(amount, decimals);
       
-      // Step 3: First, approve the deduction contract to spend tokens
+      // Step 3: First, approve the deduction contract to spend USDT
       /*
       const approvalTx = await this.erc20Contract.approve(
         DEDUCTION_CONTRACT_ADDRESS, 
@@ -360,8 +317,8 @@ export class Web3Service {
       // Step 5: Schedule the deduction
       /*
       const tx = await this.deductionContract.scheduleDeduction(
-        this.tokenAddress,         // The token address to use
-        amountInTokenUnits,        // The amount in token units
+        this.tokenAddress,         // The USDT token address
+        amountInTokenUnits,        // The amount in USDT units
         intervalInDays * 86400,    // Interval in seconds
         durationDays * 86400,      // Duration in seconds
         startDateTimestamp         // Start timestamp
@@ -372,7 +329,7 @@ export class Web3Service {
       */
       
       // For demo purposes, generate a mock transaction hash
-      console.log(`Scheduling deduction of ${amount} ${tokenInfo?.symbol || 'tokens'} every ${intervalInDays} days`);
+      console.log(`Scheduling deduction of ${amount} USDT every ${intervalInDays} days`);
       
       return "0x" + Array.from({length: 64}, () => 
         Math.floor(Math.random() * 16).toString(16)

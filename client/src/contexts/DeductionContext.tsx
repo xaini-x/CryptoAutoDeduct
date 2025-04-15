@@ -66,6 +66,12 @@ export const DeductionProvider: React.FC<DeductionProviderProps> = ({ children }
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showApprovalModal, setShowApprovalModal] = useState(false);
 
+  // Get USDT token address
+  const getUsdtTokenAddress = useCallback(() => {
+    const usdtToken = web3Service.getSupportedTokens()[0];
+    return usdtToken?.address || '';
+  }, []);
+
   const updateFormData = useCallback((data: Partial<DeductionFormData>) => {
     setFormData(prev => ({ ...prev, ...data }));
   }, []);
@@ -132,10 +138,6 @@ export const DeductionProvider: React.FC<DeductionProviderProps> = ({ children }
     openApprovalModal();
   }, [address, formData, openApprovalModal, showNotification]);
 
-  // Get wallet information
-  const { balance, selectedToken } = useWallet();
-  const selectedTokenSymbol = balance?.symbol || 'ETH';
-  
   const approveDeduction = useCallback(async () => {
     if (!address || !formData.interval) return;
     
@@ -144,7 +146,6 @@ export const DeductionProvider: React.FC<DeductionProviderProps> = ({ children }
     showNotification('pending', 'Transaction Pending', 'Your transaction is being processed.');
 
     try {
-      
       // 1. Submit to blockchain
       const startDateTimestamp = new Date(formData.startDate).getTime() / 1000;
       const txHash = await web3Service.scheduleDeduction(
@@ -159,8 +160,8 @@ export const DeductionProvider: React.FC<DeductionProviderProps> = ({ children }
         userId: 1, // Placeholder, in a real app we'd have proper user management
         walletAddress: address,
         amount: formData.amount,
-        tokenSymbol: selectedTokenSymbol,
-        tokenAddress: selectedToken || '',
+        tokenSymbol: 'USDT',
+        tokenAddress: getUsdtTokenAddress(),
         interval: formData.interval,
         duration: formData.duration,
         startDate: new Date(formData.startDate),
@@ -175,8 +176,8 @@ export const DeductionProvider: React.FC<DeductionProviderProps> = ({ children }
         deductionId: savedDeduction.id,
         walletAddress: address,
         amount: formData.amount,
-        tokenSymbol: selectedTokenSymbol,
-        tokenAddress: selectedToken || '',
+        tokenSymbol: 'USDT',
+        tokenAddress: getUsdtTokenAddress(),
         status: 'success',
         date: new Date(),
         txHash,
@@ -197,7 +198,7 @@ export const DeductionProvider: React.FC<DeductionProviderProps> = ({ children }
     } finally {
       setIsSubmitting(false);
     }
-  }, [address, formData, closeApprovalModal, showNotification, resetForm, selectedToken, selectedTokenSymbol]);
+  }, [address, formData, closeApprovalModal, showNotification, resetForm, getUsdtTokenAddress]);
 
   const cancelDeduction = useCallback(async (id: number) => {
     if (!address) return;
