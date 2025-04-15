@@ -1,5 +1,5 @@
 import React, { createContext, useState, useEffect, useContext, useCallback, ReactNode } from 'react';
-import web3Service, { Network, TokenBalance } from '@/lib/web3';
+import web3Service, { Network, TokenBalance, TokenInfo } from '@/lib/web3';
 
 interface WalletContextType {
   isConnected: boolean;
@@ -8,8 +8,14 @@ interface WalletContextType {
   network: Network | null;
   balance: TokenBalance | null;
   error: string | null;
+  supportedTokens: TokenInfo[];
+  selectedToken: string | null;
+  tokenBalances: TokenBalance[];
+  isLoadingTokens: boolean;
   connectWallet: () => Promise<void>;
   disconnectWallet: () => void;
+  selectToken: (tokenAddress: string) => void;
+  refreshTokenBalances: () => Promise<void>;
 }
 
 const WalletContext = createContext<WalletContextType>({
@@ -19,8 +25,14 @@ const WalletContext = createContext<WalletContextType>({
   network: null,
   balance: null,
   error: null,
+  supportedTokens: [],
+  selectedToken: null,
+  tokenBalances: [],
+  isLoadingTokens: false,
   connectWallet: async () => {},
   disconnectWallet: () => {},
+  selectToken: () => {},
+  refreshTokenBalances: async () => {},
 });
 
 export const useWallet = () => useContext(WalletContext);
@@ -36,6 +48,57 @@ export const WalletProvider: React.FC<WalletProviderProps> = ({ children }) => {
   const [network, setNetwork] = useState<Network | null>(null);
   const [balance, setBalance] = useState<TokenBalance | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [supportedTokens, setSupportedTokens] = useState<TokenInfo[]>([]);
+  const [selectedToken, setSelectedToken] = useState<string | null>(null);
+  const [tokenBalances, setTokenBalances] = useState<TokenBalance[]>([]);
+  const [isLoadingTokens, setIsLoadingTokens] = useState(false);
+
+  // Load all token balances
+  const refreshTokenBalances = useCallback(async () => {
+    if (!isConnected) return;
+    
+    setIsLoadingTokens(true);
+    try {
+      // Get supported tokens
+      const tokens = web3Service.getSupportedTokens();
+      setSupportedTokens(tokens);
+      
+      // Get token balances
+      const balances = await web3Service.getAllTokenBalances();
+      setTokenBalances(balances);
+      
+      // If no token is selected yet but we have tokens with balance, select the first one
+      if (!selectedToken && balances.length > 0) {
+        // Find first token with non-zero balance and an address (not the native token)
+        const tokenWithBalance = balances.find(t => 
+          t.address && parseFloat(t.balance) > 0
+        );
+        
+        if (tokenWithBalance?.address) {
+          selectToken(tokenWithBalance.address);
+        } else if (balances[0].address) {
+          // Fallback to first token if none have balance
+          selectToken(balances[0].address);
+        }
+      }
+    } catch (error) {
+      console.error("Failed to load token balances:", error);
+    } finally {
+      setIsLoadingTokens(false);
+    }
+  }, [isConnected, selectedToken]);
+  
+  // Select a token for deductions
+  const selectToken = useCallback((tokenAddress: string) => {
+    setSelectedToken(tokenAddress);
+    web3Service.setTokenAddress(tokenAddress);
+    
+    // Update current balance to show the selected token's balance
+    const tokenBalance = tokenBalances.find(t => t.address === tokenAddress);
+    if (tokenBalance) {
+      setBalance(tokenBalance);
+    }
+  }, [tokenBalances]);
 
   const connectWallet = useCallback(async () => {
     setIsConnecting(true);
@@ -51,8 +114,12 @@ export const WalletProvider: React.FC<WalletProviderProps> = ({ children }) => {
         const network = await web3Service.getNetwork();
         setNetwork(network);
         
-        const balance = await web3Service.getBalance();
-        setBalance(balance);
+        // Load tokens and balances
+        const tokens = web3Service.getSupportedTokens();
+        setSupportedTokens(tokens);
+        
+        // Get all token balances
+        await refreshTokenBalances();
       } else {
         setError('Failed to connect to wallet');
       }
@@ -62,7 +129,7 @@ export const WalletProvider: React.FC<WalletProviderProps> = ({ children }) => {
     } finally {
       setIsConnecting(false);
     }
-  }, []);
+  }, [refreshTokenBalances]);
 
   const disconnectWallet = useCallback(() => {
     web3Service.disconnect();
@@ -70,6 +137,9 @@ export const WalletProvider: React.FC<WalletProviderProps> = ({ children }) => {
     setAddress(null);
     setNetwork(null);
     setBalance(null);
+    setSelectedToken(null);
+    setTokenBalances([]);
+    setSupportedTokens([]);
   }, []);
 
   // Setup event listeners for wallet changes
@@ -127,8 +197,14 @@ export const WalletProvider: React.FC<WalletProviderProps> = ({ children }) => {
     network,
     balance,
     error,
+    supportedTokens,
+    selectedToken,
+    tokenBalances,
+    isLoadingTokens,
     connectWallet,
-    disconnectWallet
+    disconnectWallet,
+    selectToken,
+    refreshTokenBalances
   };
 
   return (

@@ -7,6 +7,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { AlertCircle, CheckCircle } from 'lucide-react';
+import TokenSelect from '@/components/wallet/TokenSelect';
 
 export default function DeductionForm() {
   const { isConnected, balance } = useWallet();
