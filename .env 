@@ -1,0 +1,2 @@
+NODE_ENV=development
+DATABASE_URL=mongodb+srv://xaini:xaini1137@auth.iuetxsd.mongodb.net/crypto?retryWrites=true&w=majority&appName=auth
